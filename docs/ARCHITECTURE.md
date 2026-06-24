@@ -1,8 +1,9 @@
 # 架构
 
 PaperBlade 是一个本地优先的桌面 PDF 工具集。它用 SvelteKit SPA 搭配 Tauri
-(Rust)外壳,真正的 PDF 处理交给打包内置的命令行引擎(qpdf、Ghostscript)。
-文件全程不离开本机。
+(Rust)外壳。结构性 PDF 操作由内嵌的纯 Rust 库(lopdf)在命令里直接完成,重渲染
+类操作(压缩、栅格化)再交给打包内置的 CLI 引擎(Ghostscript)。文件全程不离开
+本机。
 
 ## 目标与约束
 
@@ -24,12 +25,13 @@ PaperBlade 是一个本地优先的桌面 PDF 工具集。它用 SvelteKit SPA �
 │  Tauri 外壳  (src-tauri/src/)                  │
 │  - #[tauri::command] 处理器                    │
 │  - 输入校验、路径处理                           │
-│  - 派生并监管引擎进程                           │
+│  - lopdf 直接处理结构性操作                     │
+│  - 重活则派生并监管引擎进程                     │
 └───────────────┬───────────────────────────────┘
-                │  std::process / sidecar
+                │  std::process / sidecar(仅重活)
 ┌───────────────▼───────────────────────────────┐
-│  CLI 引擎  (打包的 sidecar)                     │
-│  qpdf  ·  ghostscript                          │
+│  CLI 引擎  (打包的 sidecar,按需)               │
+│  ghostscript ·(渲染器待定)                     │
 └────────────────────────────────────────────────┘
 ```
 
@@ -86,8 +88,8 @@ const output: string = await invoke("merge_pdfs", {
 #[tauri::command]
 async fn merge_pdfs(inputs: Vec<String>, output: String) -> Result<String, String> {
     // 1. 校验路径存在且为 PDF
-    // 2. 用正确的参数派生 qpdf
-    // 3. 把非零退出码 / stderr 映射成 Err(String)
+    // 2. 用 lopdf 加载、重映射对象、合并页树(或派生引擎处理重活)
+    // 3. 把库/引擎错误映射成 Err(String)
     // 4. 成功则返回输出路径
 }
 ```
@@ -102,17 +104,22 @@ async fn merge_pdfs(inputs: Vec<String>, output: String) -> Result<String, Strin
 
 ## 引擎集成
 
-qpdf 和 Ghostscript 作为 Tauri **sidecar** 随包发布(在 `bundle.externalBin`
-中声明),因此从应用包内解析,而不依赖用户的 `PATH`。Rust 通过 shell/进程 API
-派生它们,传入绝对路径,读取退出码和 stderr。
+分两层:
 
-| 引擎 | 使用方 |
-|------|--------|
-| qpdf | 合并、拆分、加/解密、结构性操作 |
-| Ghostscript | 压缩(降采样)、部分转换路径 |
+- **lopdf(内嵌 Rust 库)** 处理结构性操作 —— 合并、拆分、加/解密。命令里直接
+  调用,无外部进程、无 dylib、无 `PATH` 依赖。`src-tauri/src/merge.rs` 是首个范例。
+- **CLI 引擎(按需 sidecar)** 处理 lopdf 力所不及的重活。Ghostscript 用于压缩
+  (降采样),作为 Tauri **sidecar** 随包发布(在 `bundle.externalBin` 声明),
+  从应用包内解析而非用户 `PATH`;Rust 通过进程 API 派生,传绝对路径,读退出码 +
+  stderr。
 
-水印和 PDF↔图片转换可能需要额外的渲染器(如 PDF 栅格化引擎);该引擎选型推迟到
-排期这些工具时再定。
+| 操作 | 引擎 |
+|------|------|
+| 合并、拆分、加/解密 | lopdf(库) |
+| 压缩(降采样) | Ghostscript(sidecar) |
+| 水印、PDF↔图片转换 | 渲染器待定(排期时再选) |
+
+引入第一个 sidecar 前不需要任何二进制打包;它推迟到压缩工具排期时再做。
 
 ## 安全模型
 
