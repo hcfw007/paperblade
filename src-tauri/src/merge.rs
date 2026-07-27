@@ -22,8 +22,8 @@ pub fn merge_pdfs(inputs: &[String], output: &str) -> Result<(), String> {
 
     for path in inputs {
         validate_pdf_path(path)?;
-        let mut doc = Document::load(path)
-            .map_err(|e| format!("Failed to read {}: {e}", file_label(path)))?;
+        let mut doc =
+            Document::load(path).map_err(|e| format!("Failed to read {}: {e}", file_label(path)))?;
         doc.renumber_objects_with(max_id);
         max_id = doc.max_id + 1;
 
@@ -66,7 +66,10 @@ fn assemble(
     let (pages_id, pages_obj) = pages.ok_or("No page tree found in inputs.")?;
 
     // Re-parent every page onto the single merged Pages node.
-    let kids: Vec<Object> = documents_pages.iter().map(|(id, _)| Object::Reference(*id)).collect();
+    let kids: Vec<Object> = documents_pages
+        .iter()
+        .map(|(id, _)| Object::Reference(*id))
+        .collect();
     let page_count = documents_pages.len() as u32;
     for (object_id, object) in &documents_pages {
         if let Ok(dict) = object.as_dict() {

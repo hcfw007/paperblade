@@ -102,7 +102,13 @@ fn parse_page(token: &str, total: u32) -> Result<u32, String> {
 }
 
 /// Write one slice of `doc` covering `span`, and return the path written.
-fn write_span(doc: &Document, span: Span, total: u32, output_dir: &str, stem: &str) -> Result<String, String> {
+fn write_span(
+    doc: &Document,
+    span: Span,
+    total: u32,
+    output_dir: &str,
+    stem: &str,
+) -> Result<String, String> {
     let (start, end) = span;
     let drop: Vec<u32> = (1..=total).filter(|p| *p < start || *p > end).collect();
 

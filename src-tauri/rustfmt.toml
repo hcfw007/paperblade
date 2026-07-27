@@ -1,0 +1,3 @@
+# Wide enough for the error-mapping closures that show up all over the PDF
+# code; the default 100 forces them into noisy multi-line chains.
+max_width = 110
