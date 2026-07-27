@@ -1,3 +1,4 @@
+mod compress;
 mod encrypt;
 mod merge;
 mod pdf;
@@ -44,6 +45,23 @@ async fn is_encrypted(input: String) -> Result<bool, String> {
     encrypt::is_encrypted(&input)
 }
 
+/// Shrink `input` into `output` at the given quality preset.
+#[tauri::command]
+async fn compress_pdf(
+    input: String,
+    output: String,
+    quality: compress::Quality,
+) -> Result<compress::Report, String> {
+    let gs = compress::find_ghostscript()?;
+    compress::compress_pdf(&gs, &input, &output, quality)
+}
+
+/// Whether a Ghostscript binary can be found, so the page can say so up front.
+#[tauri::command]
+async fn has_compression_engine() -> bool {
+    compress::find_ghostscript().is_ok()
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -55,7 +73,9 @@ pub fn run() {
             page_count,
             encrypt_pdf,
             decrypt_pdf,
-            is_encrypted
+            is_encrypted,
+            compress_pdf,
+            has_compression_engine
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
