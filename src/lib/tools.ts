@@ -27,7 +27,7 @@ export const TOOLS: Tool[] = [
     title: "Split",
     subtitle: "Break a PDF into separate files",
     href: "/split",
-    available: false,
+    available: true,
   },
   {
     id: "compress",
