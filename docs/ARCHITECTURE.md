@@ -62,12 +62,16 @@ SvelteKit 5(runes)运行在 SPA 模式:`ssr = false`,`adapter-static` 配
 |------|------|
 | `src/main.rs` | 二进制入口 → 调用 `paperblade_lib::run()` |
 | `src/lib.rs` | Builder 配置 + `invoke_handler![]` 命令注册表 |
+| `src/pdf.rs` | 各工具共用:路径校验、文件名标签、页数、`/Type` 判断 |
+| `src/merge.rs` | 合并算法(对象重编号 + 页树重建) |
+| `src/split.rs` | 拆分算法(页码范围解析 + 逐片删页) |
 | `tauri.conf.json` | 窗口、打包目标、图标、CSP |
 | `capabilities/default.json` | 主窗口的权限授予 |
 | `Cargo.toml` | Rust 依赖(tauri、serde、插件) |
 
-目前 `invoke_handler![]` 是空的 —— 还没有任何命令。第一步实质工作就是注册一个
-命令并接通首个引擎调用(见 ROADMAP)。
+`invoke_handler![]` 目前注册了 `merge_pdfs`、`split_pdf` 和 `page_count`。命令本身
+只做参数搬运,真正的 PDF 逻辑住在各自的模块里(`merge.rs` / `split.rs`),路径校验
+和页树探查等共用小工具住在 `pdf.rs`。
 
 ## 前端 ↔ Rust 契约
 
@@ -108,6 +112,11 @@ async fn merge_pdfs(inputs: Vec<String>, output: String) -> Result<String, Strin
 
 - **lopdf(内嵌 Rust 库)** 处理结构性操作 —— 合并、拆分、加/解密。命令里直接
   调用,无外部进程、无 dylib、无 `PATH` 依赖。`src-tauri/src/merge.rs` 是首个范例。
+
+  拆分走的是"克隆再删页"而不是"从零搭页树":每个切片都是整份文档的副本,删掉
+  区间外的页后再 `prune_objects()` 回收孤儿对象。这样被保留页引用的字体、图片、
+  注释都会自然跟着走。代价是嵌入字体在每个切片里各留一份,切片体积之和会大于
+  原文件 —— 正确性优先,后续可在压缩工具里做字体子集化。
 - **CLI 引擎(按需 sidecar)** 处理 lopdf 力所不及的重活。Ghostscript 用于压缩
   (降采样),作为 Tauri **sidecar** 随包发布(在 `bundle.externalBin` 声明),
   从应用包内解析而非用户 `PATH`;Rust 通过进程 API 派生,传绝对路径,读退出码 +

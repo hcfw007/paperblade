@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
-use std::path::Path;
 
 use lopdf::{Document, Object, ObjectId};
+
+use crate::pdf::{file_label, type_is, validate_pdf_path};
 
 /// Merge several PDFs, in the given order, into a single output file.
 ///
@@ -101,75 +102,10 @@ fn assemble(
     Ok(())
 }
 
-/// True when the object is a dictionary whose `/Type` matches `name`.
-fn type_is(object: &Object, name: &[u8]) -> bool {
-    object
-        .as_dict()
-        .ok()
-        .and_then(|d| d.get(b"Type").ok())
-        .and_then(|t| t.as_name().ok())
-        .map(|n| n == name)
-        .unwrap_or(false)
-}
-
-fn validate_pdf_path(path: &str) -> Result<(), String> {
-    let p = Path::new(path);
-    if !p.is_file() {
-        return Err(format!("File not found: {}", file_label(path)));
-    }
-    let is_pdf = p
-        .extension()
-        .and_then(|e| e.to_str())
-        .map(|e| e.eq_ignore_ascii_case("pdf"))
-        .unwrap_or(false);
-    if !is_pdf {
-        return Err(format!("Not a PDF: {}", file_label(path)));
-    }
-    Ok(())
-}
-
-fn file_label(path: &str) -> String {
-    Path::new(path)
-        .file_name()
-        .and_then(|n| n.to_str())
-        .unwrap_or(path)
-        .to_string()
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
-    use lopdf::{dictionary, Object};
-
-    /// Write a minimal valid single-page PDF to `path`.
-    fn write_one_page_pdf(path: &str) {
-        let mut doc = Document::with_version("1.5");
-        let pages_id = doc.new_object_id();
-        let page_id = doc.add_object(dictionary! {
-            "Type" => "Page",
-            "Parent" => pages_id,
-            "MediaBox" => vec![
-                Object::Integer(0),
-                Object::Integer(0),
-                Object::Integer(612),
-                Object::Integer(792),
-            ],
-        });
-        doc.objects.insert(
-            pages_id,
-            Object::Dictionary(dictionary! {
-                "Type" => "Pages",
-                "Kids" => vec![Object::Reference(page_id)],
-                "Count" => 1,
-            }),
-        );
-        let catalog_id = doc.add_object(dictionary! {
-            "Type" => "Catalog",
-            "Pages" => pages_id,
-        });
-        doc.trailer.set("Root", catalog_id);
-        doc.save(path).expect("write fixture pdf");
-    }
+    use crate::pdf::test_support::write_blank_pdf;
 
     #[test]
     fn merges_two_single_page_pdfs_into_two_pages() {
@@ -183,8 +119,8 @@ mod tests {
             out.to_str().unwrap().to_string(),
         );
 
-        write_one_page_pdf(&a);
-        write_one_page_pdf(&b);
+        write_blank_pdf(&a, 1);
+        write_blank_pdf(&b, 1);
 
         merge_pdfs(&[a, b], &out).expect("merge should succeed");
 
