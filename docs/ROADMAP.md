@@ -18,6 +18,7 @@
 |------|------|------|------|------|
 | 合并 Merge | ✅ | `merge_pdfs` | lopdf | ✅ 已完成 |
 | 拆分 Split | ✅ | `split_pdf` | lopdf | ✅ 已完成 |
+| 加密/解密 Encrypt | ✅ | `encrypt_pdf` / `decrypt_pdf` | lopdf | ✅ 已完成 |
 | 加密/解密 Encrypt | — | — | lopdf | ❌ 计划中 |
 | 压缩 Compress | — | — | ghostscript | ❌ 计划中 |
 | 水印 Watermark | — | — | 待定 | ❌ 计划中 |
@@ -48,7 +49,13 @@
   - [x] 7 个单元/集成测试;并用系统 PDFKit 独立验证真实 PDF 切片可打开、
         文字落在正确的页
   - [ ] 「按大小」拆分 —— 需要先能预估输出体积,推迟到压缩工具落地后再做
-- [ ] **加密/解密 Encrypt** —— 设置/移除密码 → lopdf
+- [x] **加密/解密 Encrypt** —— 设置/移除密码 → lopdf
+  - [x] AES-128(V4/R4);**不要**"升级"到 AES-256(V5/R6),见下方已知取舍
+  - [x] 缺 `/ID` 的文档自动补一个,否则 V4 密钥推导直接失败
+  - [x] 解密走 `load_with_password`,并清掉 trailer 里的 `Encrypt`
+  - [x] 新增 `is_encrypted` 命令,页面据此自动切换加锁/解锁
+  - [x] 7 个测试;并用系统 PDFKit 验证加密件确实需要密码、正确密码取出的
+        文字与原文逐字一致、错误密码被拒
 - [ ] **压缩 Compress** —— 质量预设(screen/ebook/printer)→ Ghostscript sidecar
 
 ## 里程碑 2 —— 重渲染类工具
@@ -65,6 +72,12 @@
 - [ ] 跨平台引擎打包(Windows/Linux)
 
 ## 已知取舍
+
+- **加密用 AES-128 而不是 AES-256,这是有意的。** lopdf 的 V5/R6(AES-256)
+  产物无法互操作:macOS PDFKit 能验证密码,却读出 0 个字符 —— 它推导出的文件
+  密钥和 lopdf 加密时用的不是同一个。lopdf 自己的 `encrypt_v5` 测试只在
+  lopdf 内部往返,所以从没暴露过。V4/R4(AES-128)对 PDFKit 验证完全干净。
+  别人解不开的强加密,不如能用的弱加密。要动这里,先跑外部 reader 验证。
 
 - **拆分后体积之和大于原文件。** 嵌入字体会在每个切片里各留一份 —— 保留页引用
   什么就带走什么,这是正确性换来的。字体子集化留给压缩工具。

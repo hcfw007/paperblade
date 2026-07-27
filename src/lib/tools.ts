@@ -41,7 +41,7 @@ export const TOOLS: Tool[] = [
     title: "Encrypt & Decrypt",
     subtitle: "Add or remove a PDF password",
     href: "/encrypt",
-    available: false,
+    available: true,
   },
   {
     id: "watermark",

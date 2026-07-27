@@ -2592,6 +2592,7 @@ name = "paperblade"
 version = "0.1.0"
 dependencies = [
  "lopdf",
+ "rand",
  "serde",
  "serde_json",
  "tauri",

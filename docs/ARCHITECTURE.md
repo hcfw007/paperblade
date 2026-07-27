@@ -65,11 +65,13 @@ SvelteKit 5(runes)运行在 SPA 模式:`ssr = false`,`adapter-static` 配
 | `src/pdf.rs` | 各工具共用:路径校验、文件名标签、页数、`/Type` 判断 |
 | `src/merge.rs` | 合并算法(对象重编号 + 页树重建) |
 | `src/split.rs` | 拆分算法(页码范围解析 + 逐片删页) |
+| `src/encrypt.rs` | 加解密(AES-128 标准安全处理器) |
 | `tauri.conf.json` | 窗口、打包目标、图标、CSP |
 | `capabilities/default.json` | 主窗口的权限授予 |
 | `Cargo.toml` | Rust 依赖(tauri、serde、插件) |
 
-`invoke_handler![]` 目前注册了 `merge_pdfs`、`split_pdf` 和 `page_count`。命令本身
+`invoke_handler![]` 目前注册了 `merge_pdfs`、`split_pdf`、`page_count`、
+`encrypt_pdf`、`decrypt_pdf` 和 `is_encrypted`。命令本身
 只做参数搬运,真正的 PDF 逻辑住在各自的模块里(`merge.rs` / `split.rs`),路径校验
 和页树探查等共用小工具住在 `pdf.rs`。
 
@@ -122,6 +124,10 @@ async fn merge_pdfs(inputs: Vec<String>, output: String) -> Result<String, Strin
   从应用包内解析而非用户 `PATH`;Rust 通过进程 API 派生,传绝对路径,读退出码 +
   stderr。
 
+  加密这条路上有个不直观的地方:`Document::load` 碰到加密文件时,一旦空密码
+  认证失败就直接返回,连一个对象都不读。所以解密必须走
+  `load_with_password`,而不是"先 load 再 decrypt"。
+
 | 操作 | 引擎 |
 |------|------|
 | 合并、拆分、加/解密 | lopdf(库) |
@@ -139,6 +145,9 @@ async fn merge_pdfs(inputs: Vec<String>, output: String) -> Result<String, Strin
   为真实策略。
 - **边界校验。** 每个命令都在 Rust 侧重新校验路径/选项;前端校验只为体验,绝不
   作为信任边界。
+- **密码只过内存。** 加解密的密码作为命令参数传入,用完即随栈帧释放:不落盘、
+  不写日志、不进错误信息。前端在操作成功后清空输入框。解密失败一律回
+  "Wrong password.",不透传库的内部错误 —— 那些信息只会帮到猜密码的人。
 
 ## 构建与运行
 
