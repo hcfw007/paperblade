@@ -24,7 +24,7 @@ to whatever is on your `PATH`, and the page tells you when it can't find one.
 
 ## Status
 
-Early WIP, macOS first. The three shipped tools work end to end and are covered
+Early WIP, macOS first. The four shipped tools work end to end and are covered
 by tests — including verification against macOS PDFKit, rather than only reading
 our own output back. Not yet signed, notarized, or released as a build you can
 double-click; that's Milestone 3. See [ROADMAP.md](docs/ROADMAP.md).

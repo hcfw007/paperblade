@@ -63,6 +63,8 @@
   - [x] 读退出码 + stderr;失败时删掉可能残留的半成品文件
   - [x] `Report` 带 `grew` 标志,输出更大时如实告知而不是假装压缩成功
   - [x] `has_compression_engine` 命令,页面在引擎缺失时直接说明
+  - [x] 9 个测试,全程不需要 gs 在场:参数构建、Quality 契约、假引擎跑通
+        成功/失败路径与 `grew` 判定
   - [ ] **把 gs 真正打包成 sidecar** —— 见下,这仍是 M3 的活
 - [ ] **Ghostscript 打包(M3 前置)**
   - [ ] brew 装的 gs 链接了 12 个 homebrew dylib,不能直接分发;需要静态构建
