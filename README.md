@@ -15,16 +15,19 @@ in any of the core features.
 | **Split** | By page ranges (`1-3, 5, 8-10`) or into fixed-size chunks | Working |
 | **Encrypt & Decrypt** | Add or remove a password (AES-128) | Working |
 | **Compress** | Quality presets — 75% off a scanned page, 13% off text | Working¹ |
-| Watermark | Stamp text or an image on every page | Planned |
+| **Watermark** | Text stamp on every page — position, angle, opacity, color | Working² |
 | Convert | PDF to images, images to PDF | Planned |
 
 ¹ Compress needs Ghostscript. This build doesn't bundle it yet — it falls back
 to whatever is on your `PATH`, and the page tells you when it can't find one.
 `brew install ghostscript` covers it for now. Everything else is self-contained.
 
+² Watermark text in Chinese is drawn with a non-embedded font, so spacing can
+vary slightly between PDF readers. Image watermarks are still planned.
+
 ## Status
 
-Early WIP, macOS first. The four shipped tools work end to end and are covered
+Early WIP, macOS first. The five shipped tools work end to end and are covered
 by tests — including verification against macOS PDFKit, rather than only reading
 our own output back. Not yet signed, notarized, or released as a build you can
 double-click; that's Milestone 3. See [ROADMAP.md](docs/ROADMAP.md).
