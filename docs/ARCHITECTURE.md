@@ -138,8 +138,10 @@ async fn merge_pdfs(inputs: Vec<String>, output: String) -> Result<String, Strin
 | 操作 | 引擎 |
 |------|------|
 | 合并、拆分、加/解密 | lopdf(库) |
+| 水印(文字) | lopdf(库) |
+| 图片→PDF | printpdf(库) |
 | 压缩(降采样) | Ghostscript(sidecar) |
-| 水印、PDF↔图片转换 | 渲染器待定(排期时再选) |
+| PDF→图片 | 待定(pdfium,见 [m2-render-engine.md](./research/m2-render-engine.md) §3.3) |
 
 引入第一个 sidecar 前不需要任何二进制打包;它推迟到压缩工具排期时再做。
 

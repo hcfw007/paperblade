@@ -16,7 +16,8 @@ in any of the core features.
 | **Encrypt & Decrypt** | Add or remove a password (AES-128) | Working |
 | **Compress** | Quality presets — 75% off a scanned page, 13% off text | Working¹ |
 | **Watermark** | Text stamp on every page — position, angle, opacity, color | Working² |
-| Convert | PDF to images, images to PDF | Planned |
+| **Images to PDF** | Combine JPEG/PNG pictures into one PDF, a page each | Working³ |
+| PDF to images | Rasterize PDF pages to PNG/JPEG | Planned⁴ |
 
 ¹ Compress needs Ghostscript. This build doesn't bundle it yet — it falls back
 to whatever is on your `PATH`, and the page tells you when it can't find one.
@@ -25,9 +26,17 @@ to whatever is on your `PATH`, and the page tells you when it can't find one.
 ² Watermark text in Chinese is drawn with a non-embedded font, so spacing can
 vary slightly between PDF readers. Image watermarks are still planned.
 
+³ Images to PDF embeds your image data losslessly — nothing is downsampled or
+re-encoded at a lower quality — so a PDF of JPEG photos can come out larger
+than the photos themselves. Want it smaller, run the result through Compress.
+PNG and JPEG inputs only.
+
+⁴ PDF to images needs a rendering engine (pdfium), and bundling that safely is
+a Milestone 3 prerequisite. See [ROADMAP.md](docs/ROADMAP.md).
+
 ## Status
 
-Early WIP, macOS first. The five shipped tools work end to end and are covered
+Early WIP, macOS first. The six shipped tools work end to end and are covered
 by tests — including verification against macOS PDFKit, rather than only reading
 our own output back. Not yet signed, notarized, or released as a build you can
 double-click; that's Milestone 3. See [ROADMAP.md](docs/ROADMAP.md).
@@ -38,6 +47,8 @@ double-click; that's Milestone 3. See [ROADMAP.md](docs/ROADMAP.md).
 - [SvelteKit 5](https://svelte.dev) — SPA frontend, no server
 - [lopdf](https://github.com/J-F-Liu/lopdf) — pure-Rust PDF library, embedded;
   handles every structural operation with no external process
+- [printpdf](https://github.com/fschutt/printpdf) — pure-Rust PDF writer,
+  embedded; turns images into PDF pages
 - [Ghostscript](https://www.ghostscript.com) — external process, compression
   only. Not bundled yet; see the note under Tools and the License section.
 
