@@ -3,6 +3,7 @@ mod encrypt;
 mod merge;
 mod pdf;
 mod split;
+mod watermark;
 
 use split::SplitMode;
 
@@ -62,6 +63,16 @@ async fn has_compression_engine() -> bool {
     compress::find_ghostscript().is_ok()
 }
 
+/// Stamp text onto every page of `input`, writing the stamped copy to `output`.
+#[tauri::command]
+async fn watermark_pdf(
+    input: String,
+    output: String,
+    options: watermark::Watermark,
+) -> Result<watermark::Report, String> {
+    watermark::watermark_pdf(&input, &output, &options)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -75,7 +86,8 @@ pub fn run() {
             decrypt_pdf,
             is_encrypted,
             compress_pdf,
-            has_compression_engine
+            has_compression_engine,
+            watermark_pdf
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
