@@ -187,6 +187,17 @@ mod tests {
     }
 
     #[test]
+    fn deserializes_the_quality_names_the_frontend_sends() {
+        // The page posts exactly these strings. A rename on the enum would
+        // break that contract at runtime only, so it is pinned here.
+        for name in ["screen", "ebook", "printer"] {
+            let parsed: Quality = serde_json::from_str(&format!("\"{name}\"")).expect(name);
+            assert_eq!(parsed.as_setting(), format!("/{name}"));
+        }
+        assert!(serde_json::from_str::<Quality>("\"draft\"").is_err());
+    }
+
+    #[test]
     fn puts_the_input_last_and_the_output_in_a_flag() {
         let args = gs_args("/tmp/in.pdf", "/tmp/out.pdf", Quality::Screen);
 
@@ -221,6 +232,78 @@ mod tests {
             !Path::new(output).exists(),
             "a failed run must not leave a partial file behind"
         );
+    }
+
+    /// A stand-in for Ghostscript: a script that receives the same argument
+    /// list and writes whatever the test needs. Keeps the success path — the
+    /// size report and the `grew` flag — testable with no engine installed.
+    fn fake_engine(dir: &Path, script: &str) -> PathBuf {
+        use std::os::unix::fs::PermissionsExt;
+        let path = dir.join("fake-gs");
+        std::fs::write(&path, script).expect("write fake engine");
+        let mut perms = std::fs::metadata(&path).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&path, perms).expect("make fake engine executable");
+        path
+    }
+
+    #[test]
+    fn reports_the_sizes_and_flags_a_result_that_grew() {
+        let dir = dir_for("grew");
+        let input = dir.join("a.pdf");
+        let output = dir.join("b.pdf");
+        write_blank_pdf(input.to_str().unwrap(), 1);
+        let (input, output) = (input.to_str().unwrap(), output.to_str().unwrap());
+
+        // Ghostscript re-encodes unconditionally, so the "compressed" file can
+        // come out larger. The report must flag that instead of claiming a win.
+        let engine = fake_engine(
+            &dir,
+            r#"#!/bin/sh
+out=
+input=
+for a in "$@"; do
+  case "$a" in
+    -sOutputFile=*) out="${a#-sOutputFile=}" ;;
+    *) input="$a" ;;
+  esac
+done
+cp "$input" "$out"
+printf 'padding that makes the result larger\n' >> "$out"
+"#,
+        );
+
+        let report = compress_pdf(&engine, input, output, Quality::Ebook).unwrap();
+
+        assert!(report.grew, "a larger result must be flagged");
+        assert_eq!(report.before_bytes, std::fs::metadata(input).unwrap().len());
+        assert!(report.after_bytes > report.before_bytes);
+    }
+
+    #[test]
+    fn reports_the_savings_when_the_result_shrank() {
+        let dir = dir_for("shrank");
+        let input = dir.join("a.pdf");
+        let output = dir.join("b.pdf");
+        let (input, output) = (input.to_str().unwrap(), output.to_str().unwrap());
+        write_blank_pdf(input, 1);
+
+        let engine = fake_engine(
+            &dir,
+            r#"#!/bin/sh
+for a in "$@"; do
+  case "$a" in
+    -sOutputFile=*) printf 'tiny' > "${a#-sOutputFile=}" ;;
+  esac
+done
+"#,
+        );
+
+        let report = compress_pdf(&engine, input, output, Quality::Screen).unwrap();
+
+        assert!(!report.grew, "a smaller result is a real saving");
+        assert_eq!(report.after_bytes, 4);
+        assert!(report.after_bytes < report.before_bytes);
     }
 
     #[test]
