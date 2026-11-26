@@ -53,8 +53,8 @@ export const TOOLS: Tool[] = [
   {
     id: "convert",
     title: "Convert",
-    subtitle: "PDF to images and images to PDF",
+    subtitle: "Images to PDF now, PDF to images planned",
     href: "/convert",
-    available: false,
+    available: true,
   },
 ];

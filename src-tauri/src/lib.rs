@@ -1,4 +1,5 @@
 mod compress;
+mod convert;
 mod encrypt;
 mod merge;
 mod pdf;
@@ -73,6 +74,16 @@ async fn watermark_pdf(
     watermark::watermark_pdf(&input, &output, &options)
 }
 
+/// Build one PDF out of `inputs`, one page per image.
+#[tauri::command]
+async fn images_to_pdf(
+    inputs: Vec<String>,
+    output: String,
+    options: convert::Options,
+) -> Result<convert::Report, String> {
+    convert::images_to_pdf(&inputs, &output, options)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -87,7 +98,8 @@ pub fn run() {
             is_encrypted,
             compress_pdf,
             has_compression_engine,
-            watermark_pdf
+            watermark_pdf,
+            images_to_pdf
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
