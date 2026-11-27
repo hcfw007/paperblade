@@ -2,6 +2,7 @@
   import { open, save } from "@tauri-apps/plugin-dialog";
   import { invoke } from "@tauri-apps/api/core";
 
+  type Mode = "text" | "image";
   type Position = "center" | "diagonal" | "tiled";
 
   type Report = {
@@ -11,6 +12,11 @@
     afterBytes: number;
   };
 
+  const MODES: { id: Mode; title: string; hint: string }[] = [
+    { id: "text", title: "Text", hint: "Words, in any language" },
+    { id: "image", title: "Image", hint: "A PNG or JPEG, like a logo" },
+  ];
+
   const POSITIONS: { id: Position; title: string; hint: string }[] = [
     { id: "center", title: "Centered", hint: "One stamp at the middle of each page" },
     { id: "diagonal", title: "Diagonal", hint: "Corner to corner at 45°" },
@@ -18,10 +24,13 @@
   ];
 
   let input = $state<string | null>(null);
+  let mode = $state<Mode>("text");
   let text = $state("CONFIDENTIAL");
+  let image = $state<string | null>(null);
   let position = $state<Position>("center");
   let rotation = $state(0);
   let fontSize = $state(42);
+  let scale = $state(30);
   let opacity = $state(0.2);
   let color = $state("#888888");
   let busy = $state(false);
@@ -31,7 +40,11 @@
   // Diagonal is the 45° stamp its name promises, so the angle input stands
   // down in that mode.
   const diagonal = $derived(position === "diagonal");
-  const canRun = $derived(Boolean(input) && text.trim().length > 0 && !busy);
+  const canRun = $derived(
+    Boolean(input) &&
+      (mode === "text" ? text.trim().length > 0 : Boolean(image)) &&
+      !busy,
+  );
 
   function basename(path: string): string {
     return path.split(/[\\/]/).pop() ?? path;
@@ -60,6 +73,17 @@
     report = null;
   }
 
+  async function pickImage() {
+    const picked = await open({
+      multiple: false,
+      filters: [{ name: "Images", extensions: ["png", "jpg", "jpeg"] }],
+    });
+    if (typeof picked !== "string") return;
+    image = picked;
+    error = null;
+    report = null;
+  }
+
   async function run() {
     if (!input) return;
     error = null;
@@ -72,19 +96,21 @@
     });
     if (!output) return;
 
+    const shared = {
+      opacity,
+      rotation: diagonal ? 45 : rotation,
+      position,
+    };
+    const isText = mode === "text";
+
     busy = true;
     try {
-      report = await invoke<Report>("watermark_pdf", {
+      report = await invoke<Report>(isText ? "watermark_pdf" : "image_watermark_pdf", {
         input,
         output,
-        options: {
-          text: text.trim(),
-          opacity,
-          rotation: diagonal ? 45 : rotation,
-          position,
-          fontSize,
-          color,
-        },
+        options: isText
+          ? { text: text.trim(), fontSize, color, ...shared }
+          : { image, scale, ...shared },
       });
     } catch (e) {
       error = typeof e === "string" ? e : "Watermarking failed. Please try again.";
@@ -97,7 +123,7 @@
 <section class="page">
   <header>
     <h1>Watermark</h1>
-    <p>Stamp text onto every page. Files stay on this computer.</p>
+    <p>Stamp text or an image onto every page. Files stay on this computer.</p>
   </header>
 
   <div class="toolbar">
@@ -112,20 +138,56 @@
     </div>
 
     <div class="fields">
-      <label class="field">
-        <span class="label">Watermark text</span>
-        <input
-          class="text"
-          type="text"
-          bind:value={text}
-          oninput={() => (error = null)}
-          disabled={busy}
-        />
-        <span class="hint">
-          Chinese text is drawn with a non-embedded font — spacing can vary
-          slightly between PDF readers.
-        </span>
-      </label>
+      <fieldset class="positions">
+        <legend>Watermark</legend>
+        {#each MODES as option (option.id)}
+          <label class="option">
+            <input
+              type="radio"
+              bind:group={mode}
+              value={option.id}
+              disabled={busy}
+            />
+            <span class="option-body">
+              <span class="option-title">{option.title}</span>
+              <span class="option-hint">{option.hint}</span>
+            </span>
+          </label>
+        {/each}
+      </fieldset>
+
+      {#if mode === "text"}
+        <label class="field">
+          <span class="label">Watermark text</span>
+          <input
+            class="text"
+            type="text"
+            bind:value={text}
+            oninput={() => (error = null)}
+            disabled={busy}
+          />
+          <span class="hint">
+            Chinese text is drawn with a non-embedded font — spacing can vary
+            slightly between PDF readers.
+          </span>
+        </label>
+      {:else}
+        <div class="field">
+          <span class="label">Watermark image</span>
+          <div class="row">
+            <button class="btn" onclick={pickImage} disabled={busy}>
+              Choose image
+            </button>
+            {#if image}
+              <span class="name" title={image}>{basename(image)}</span>
+            {/if}
+          </div>
+          <span class="hint">
+            PNG or JPEG. Transparent PNGs keep their see-through parts, so a
+            logo with a transparent background stays clean.
+          </span>
+        </div>
+      {/if}
 
       <fieldset class="positions">
         <legend>Position</legend>
@@ -162,18 +224,20 @@
           {/if}
         </label>
 
-        <label class="field">
-          <span class="label">Font size (points)</span>
-          <input
-            class="text"
-            type="number"
-            min="1"
-            max="200"
-            step="1"
-            bind:value={fontSize}
-            disabled={busy}
-          />
-        </label>
+        {#if mode === "text"}
+          <label class="field">
+            <span class="label">Font size (points)</span>
+            <input
+              class="text"
+              type="number"
+              min="1"
+              max="200"
+              step="1"
+              bind:value={fontSize}
+              disabled={busy}
+            />
+          </label>
+        {/if}
       </div>
 
       <label class="field">
@@ -188,10 +252,26 @@
         />
       </label>
 
-      <label class="field">
-        <span class="label">Color</span>
-        <input class="swatch" type="color" bind:value={color} disabled={busy} />
-      </label>
+      {#if mode === "image"}
+        <label class="field">
+          <span class="label">Size — {scale}% of the page width</span>
+          <input
+            type="range"
+            min="5"
+            max="100"
+            step="5"
+            bind:value={scale}
+            disabled={busy}
+          />
+        </label>
+      {/if}
+
+      {#if mode === "text"}
+        <label class="field">
+          <span class="label">Color</span>
+          <input class="swatch" type="color" bind:value={color} disabled={busy} />
+        </label>
+      {/if}
     </div>
 
     <p class="hint note">

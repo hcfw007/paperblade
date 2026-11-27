@@ -5,6 +5,7 @@ mod merge;
 mod pdf;
 mod split;
 mod watermark;
+mod watermark_image;
 
 use split::SplitMode;
 
@@ -74,6 +75,16 @@ async fn watermark_pdf(
     watermark::watermark_pdf(&input, &output, &options)
 }
 
+/// Stamp a picture onto every page of `input`, writing the stamped copy to `output`.
+#[tauri::command]
+async fn image_watermark_pdf(
+    input: String,
+    output: String,
+    options: watermark_image::ImageWatermark,
+) -> Result<watermark::Report, String> {
+    watermark_image::watermark_pdf(&input, &output, &options)
+}
+
 /// Build one PDF out of `inputs`, one page per image.
 #[tauri::command]
 async fn images_to_pdf(
@@ -99,6 +110,7 @@ pub fn run() {
             compress_pdf,
             has_compression_engine,
             watermark_pdf,
+            image_watermark_pdf,
             images_to_pdf
         ])
         .run(tauri::generate_context!())

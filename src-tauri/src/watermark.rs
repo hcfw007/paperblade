@@ -5,6 +5,10 @@
 //! doc `docs/research/m2-render-engine.md` §3.1). Text uses non-embedded
 //! fonts: base-14 Helvetica for ASCII, Adobe's preset STSong-Light with the
 //! UniGB-UCS2-H CMap for everything else.
+//!
+//! The plumbing — page geometry, placement, content-stream appending,
+//! resource wiring — is shared with the image watermark in
+//! [`crate::watermark_image`].
 
 use std::path::Path;
 
@@ -193,7 +197,7 @@ fn parse_hex_color(input: &str) -> Result<(f32, f32, f32), String> {
 }
 
 /// Numbers for the content stream: three decimals at most, never "-0".
-fn num(value: f64) -> String {
+pub(crate) fn num(value: f64) -> String {
     let rounded = (value * 1000.0).round() / 1000.0;
     if rounded == rounded.trunc() {
         format!("{}", rounded as i64)
@@ -204,13 +208,13 @@ fn num(value: f64) -> String {
 
 /// Where a page lives in user space, and how it is turned for display.
 #[derive(Debug, Clone, Copy, PartialEq)]
-struct PageRect {
-    x0: f64,
-    y0: f64,
-    x1: f64,
-    y1: f64,
+pub(crate) struct PageRect {
+    pub(crate) x0: f64,
+    pub(crate) y0: f64,
+    pub(crate) x1: f64,
+    pub(crate) y1: f64,
     /// The page's `/Rotate` value, in degrees.
-    rotate: f64,
+    pub(crate) rotate: f64,
 }
 
 impl PageRect {
@@ -224,7 +228,7 @@ impl PageRect {
 /// CropBox wins over MediaBox, and both are inheritable attributes — on
 /// plenty of real files they live on the `/Pages` node, and bleeding
 /// documents do not start at (0, 0) (research doc §6 M2a).
-fn page_rect(doc: &Document, page_id: (u32, u16)) -> Result<PageRect, String> {
+pub(crate) fn page_rect(doc: &Document, page_id: (u32, u16)) -> Result<PageRect, String> {
     let box_of = |key: &[u8]| inherited_array(doc, page_id, key);
     let bounds = box_of(b"CropBox").or_else(|| box_of(b"MediaBox"));
     let Some(nums) = bounds.filter(|n| n.len() == 4) else {
@@ -279,15 +283,21 @@ fn walk_ancestors<T>(
     None
 }
 
-/// Where each stamp's anchor sits on the page.
-fn stamp_centers(rect: &PageRect, position: Position, width_pt: f64, size: f64) -> Vec<(f64, f64)> {
+/// Where each stamp's anchor sits on the page. `width_pt` and `height_pt` are
+/// the stamp's drawn size: the tiled grid keys off both.
+pub(crate) fn stamp_centers(
+    rect: &PageRect,
+    position: Position,
+    width_pt: f64,
+    height_pt: f64,
+) -> Vec<(f64, f64)> {
     match position {
         Position::Center | Position::Diagonal => vec![rect.center()],
         Position::Tiled => {
             // Rows offset by half a step so the stamps read as diagonal
             // bands once the rotation is applied.
-            let step_x = (width_pt + size).max(size * 2.0);
-            let step_y = size * 3.0;
+            let step_x = (width_pt + height_pt).max(height_pt * 2.0);
+            let step_y = height_pt * 3.0;
             let mut points = Vec::new();
             let mut row = 0u32;
             let mut y = rect.y0 + step_y / 2.0;
@@ -312,7 +322,7 @@ fn stamp_centers(rect: &PageRect, position: Position, width_pt: f64, size: f64) 
 /// which is why the UI pins the angle input in that mode. The page's own
 /// `/Rotate` turns everything the reader draws, so it is subtracted to keep
 /// the stamp upright on rotated pages.
-fn stamp_angle(position: Position, rotation: f64, page_rotate: f64) -> f64 {
+pub(crate) fn stamp_angle(position: Position, rotation: f64, page_rotate: f64) -> f64 {
     let base = match position {
         Position::Diagonal => 45.0,
         Position::Center | Position::Tiled => rotation,
@@ -533,7 +543,7 @@ fn install_page_resources(
 }
 
 /// The page's effective `/Resources`: its own, or the nearest ancestor's.
-fn effective_resources(doc: &Document, page_id: (u32, u16)) -> Dictionary {
+pub(crate) fn effective_resources(doc: &Document, page_id: (u32, u16)) -> Dictionary {
     walk_ancestors(doc, page_id, |dict| match dict.get(b"Resources").ok()? {
         Object::Reference(id) => doc.get_dictionary(*id).ok().cloned(),
         Object::Dictionary(d) => Some(d.clone()),
@@ -544,7 +554,7 @@ fn effective_resources(doc: &Document, page_id: (u32, u16)) -> Dictionary {
 
 /// A resources sub-dictionary (`/Font` or `/ExtGState`), dereferencing a
 /// shared one so the caller can copy it.
-fn sub_dict(doc: &Document, resources: &Dictionary, key: &[u8]) -> Dictionary {
+pub(crate) fn sub_dict(doc: &Document, resources: &Dictionary, key: &[u8]) -> Dictionary {
     match resources.get(key).ok() {
         Some(Object::Reference(id)) => doc.get_dictionary(*id).cloned().unwrap_or_default(),
         Some(Object::Dictionary(d)) => d.clone(),
@@ -553,7 +563,7 @@ fn sub_dict(doc: &Document, resources: &Dictionary, key: &[u8]) -> Dictionary {
 }
 
 /// A resource name that cannot shadow anything the page already uses.
-fn unique_name(taken: &Dictionary, base: &str) -> Vec<u8> {
+pub(crate) fn unique_name(taken: &Dictionary, base: &str) -> Vec<u8> {
     let mut name = base.to_string();
     let mut suffix = 2;
     while taken.get(name.as_bytes()).is_ok() {
@@ -569,7 +579,11 @@ fn unique_name(taken: &Dictionary, base: &str) -> Vec<u8> {
 /// array, or a reference *to* an array (the trap the research doc flags in
 /// §2.4). Normalizing to one direct array of stream references keeps every
 /// original stream byte-for-byte intact and just adds the watermark last.
-fn append_content_stream(doc: &mut Document, page_id: (u32, u16), bytes: Vec<u8>) -> Result<(), String> {
+pub(crate) fn append_content_stream(
+    doc: &mut Document,
+    page_id: (u32, u16),
+    bytes: Vec<u8>,
+) -> Result<(), String> {
     let existing = doc
         .get_dictionary(page_id)
         .ok()

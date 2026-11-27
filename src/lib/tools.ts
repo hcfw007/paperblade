@@ -46,7 +46,7 @@ export const TOOLS: Tool[] = [
   {
     id: "watermark",
     title: "Watermark",
-    subtitle: "Stamp text on every page",
+    subtitle: "Stamp text or an image on every page",
     href: "/watermark",
     available: true,
   },
