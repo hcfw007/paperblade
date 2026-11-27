@@ -11,9 +11,9 @@
 ## 当前进度
 
 六个工具都已端到端打通:命令 + dialog 选文件/选目录 + 各自的页面,Rust 侧有
-算法或参数构建的测试。水印目前覆盖文字;图片水印仍是计划。转换的图片→PDF 已
-落地;PDF→图片 **待 pdfium spike(M3 前置)**,在捆绑 libpdfium 的签名/公证
-可行性验证之前不动。
+算法或参数构建的测试。水印的文字与图片两种模式都已落地。转换的图片→PDF 已
+落地(JPEG 原码直嵌);PDF→图片 **待 pdfium spike(M3 前置)**,在捆绑 libpdfium
+的签名/公证可行性验证之前不动。
 
 压缩是唯一依赖外部引擎的工具,而那个引擎**还没有被打包进来** —— 当前是回退到
 用户 `PATH` 上的 `gs`,页面在找不到时会直说。真正的 sidecar 打包见 M3 前置项。
@@ -24,7 +24,7 @@
 | 拆分 Split | ✅ | `split_pdf` | lopdf | ✅ 已完成 |
 | 加密/解密 Encrypt | ✅ | `encrypt_pdf` / `decrypt_pdf` | lopdf | ✅ 已完成 |
 | 压缩 Compress | ✅ | `compress_pdf` | Ghostscript | ✅ 已完成(引擎待打包) |
-| 水印 Watermark | ✅ | `watermark_pdf` | lopdf | ✅ 文字已完成(图片待做) |
+| 水印 Watermark | ✅ | `watermark_pdf` / `image_watermark_pdf` | lopdf | ✅ 文字 + 图片已完成 |
 | 转换 Convert | ✅ | `images_to_pdf` | printpdf | ◑ 图片→PDF 已完成;PDF→图片 **待 pdfium spike(M3 前置)** |
 
 ## 里程碑 0 —— 引擎管道(已完成)
@@ -90,17 +90,28 @@
         非法输入、失败不留半成品
   - [ ] 四阅读器回归(R3:Adobe Reader / PDFKit / Chrome / MuPDF 验证中文排版;
         偏差不可接受时按 §3.1 触发条件切 pdfium 嵌字)
-- [ ] **水印 M2a · 图片** —— Image XObject + 缩放/透明度
+- [x] **水印 M2a · 图片** —— `image_watermark_pdf`,复用文字水印的内容流叠加
+      架构(`/Contents` 归一化、`/Rotate` 补偿、Box 继承链、共享对象逐页挂载)
+  - [x] PNG/JPEG 水印图:整个文档共享一个 Image XObject(存一份,逐页 `Do`),
+        Flate 压缩样本,PNG 透明通道保留为 `/SMask`
+  - [x] 参数:透明度(ExtGState `ca`/`CA`)/ 缩放(按页宽百分比,保纵横比)/
+        位置(平铺·对角·居中)/ 旋转角,`q…Q` 包裹防状态泄漏
+  - [x] 21 个测试:图片字节嵌入验证(RGB/灰度/带 alpha)、参数矩阵、非法
+        输入(非图片水印文件、超大水印图)、失败不留半成品
 - [x] **转换 M2c · 图片→PDF** —— `images_to_pdf`,printpdf(纯 Rust,零引擎,
       调研文档 §3.2 的首选方案)
   - [x] 每图一页,顺序即页序;JPEG/PNG 输入
   - [x] 页面尺寸策略:跟随图片(按文件内嵌 DPI 折算,缺失回退 96 dpi)/ A4 /
         Letter,方向随图片自适应
   - [x] 缩放适配 contain / cover(超出部分裁剪)/ stretch
-  - [x] 无损嵌入:关闭 printpdf 默认的 JPEG 重编码与 2 MB 降采样(会悄悄损伤
-        画质);超大图(>1 亿像素)在解码前拒绝,失败不留半成品
-  - [x] 20 个测试:页数/页面尺寸断言、图片字节嵌入验证、非法输入(非图片/
-        零文件/超大图)、失败清理、header 解析与排版数学
+  - [x] JPEG 原码直嵌:DCTDecode ExternalXObject,内嵌字节与源文件一致(不再
+        "解码→重编码 Flate"把照片撑大数倍);EXIF 旋转在排版矩阵里补偿(页面
+        跟随显示尺寸);灰度 → DeviceGray、CMYK → DeviceCMYK
+  - [x] 无损嵌入(PNG):关闭 printpdf 默认的 JPEG 重编码与 2 MB 降采样(会
+        悄悄损伤画质);超大图(>1 亿像素)在解码前拒绝,失败不留半成品
+  - [x] 26 个测试:页数/页面尺寸断言、直嵌字节断言(与源文件逐字节一致)、
+        EXIF 旋转/灰度/CMYK 边界、非法输入(非图片/零文件/超大图)、失败
+        清理、header 解析与排版数学
 - [ ] **转换 M2c · PDF→图片** —— **待 pdfium spike(M3 前置)**:捆绑
       libpdfium 的签名/公证可行性未验证前不动(调研文档 §3.3、R2)。备选
       走 gs 栅格化,见 §3.3 的决策触发条件
@@ -142,12 +153,15 @@
   四阅读器实测不可接受就按调研文档 §3.1 的触发条件切 pdfium 嵌字方案。
 - **水印(以及拆分/合并)会重新序列化文档。** 原页面内容字节不动,但文件容器被
   重写:数字签名必然失效,输出文件略大。UI 如实提示,不假装无副作用。
-- **图片→PDF 无损嵌入,输出可能大于原图。** printpdf 的图片路径是"解码成像素
-  再重编码",不支持 JPEG 原码直嵌(DCTDecode 透传):照片类 JPEG 会被解码后无损
-  Flate 压缩,输出体积可比原 JPEG 大数倍。这是有意的取舍——printpdf 默认会把
-  彩色图重编码成 JPEG(质量 0.85)并把超过 2 MB 的图降采样,对截图和扫描件是
-  静默损伤,已显式关闭。要体积优先,后续做 DCTDecode 直嵌或质量选项;当下的
-  退路是把结果过一遍压缩工具。
+- **图片→PDF:JPEG 原码直嵌,PNG 无损。** JPEG 以 DCTDecode ExternalXObject
+  原样嵌入(内嵌字节与源文件逐字节一致),不再走"解码成像素再重编码"的老路 ——
+  那条路把照片类 JPEG 无损 Flate 后能撑大数倍。EXIF 旋转标记在排版矩阵里补偿
+  (PDF 阅读器不认 EXIF,不补偿的话手机竖拍照片会躺着显示);PNG 解码后无损
+  Flate 存储,printpdf 默认的 JPEG 重编码(质量 0.85)与 2 MB 降采样依旧显式
+  关闭。边界:只直嵌 8 位基线/扩展顺序/渐进 JPEG(算术编码、12 位等明确报错,
+  不留半成品);CMYK JPEG 按 /DeviceCMYK 原样嵌入,遵循 PDF 交换约定,但非常规
+  生产工具产出的 CMYK JPEG 可能在个别阅读器里颜色反转。要体积优先,把结果过
+  一遍压缩工具。
 
 ## 新增工具的约定
 

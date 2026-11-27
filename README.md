@@ -15,7 +15,7 @@ in any of the core features.
 | **Split** | By page ranges (`1-3, 5, 8-10`) or into fixed-size chunks | Working |
 | **Encrypt & Decrypt** | Add or remove a password (AES-128) | Working |
 | **Compress** | Quality presets — 75% off a scanned page, 13% off text | Working¹ |
-| **Watermark** | Text stamp on every page — position, angle, opacity, color | Working² |
+| **Watermark** | Text or image stamp on every page — position, angle, opacity | Working² |
 | **Images to PDF** | Combine JPEG/PNG pictures into one PDF, a page each | Working³ |
 | PDF to images | Rasterize PDF pages to PNG/JPEG | Planned⁴ |
 
@@ -24,12 +24,13 @@ to whatever is on your `PATH`, and the page tells you when it can't find one.
 `brew install ghostscript` covers it for now. Everything else is self-contained.
 
 ² Watermark text in Chinese is drawn with a non-embedded font, so spacing can
-vary slightly between PDF readers. Image watermarks are still planned.
+vary slightly between PDF readers. Image watermarks keep PNG transparency, so
+logos with a transparent background stay clean.
 
-³ Images to PDF embeds your image data losslessly — nothing is downsampled or
-re-encoded at a lower quality — so a PDF of JPEG photos can come out larger
-than the photos themselves. Want it smaller, run the result through Compress.
-PNG and JPEG inputs only.
+³ Images to PDF keeps your image data as it is: JPEGs are embedded byte for
+byte — no re-encoding, no quality loss, no size surprise — and PNGs are stored
+losslessly. PNG and JPEG inputs only. Want the result smaller, run it through
+Compress.
 
 ⁴ PDF to images needs a rendering engine (pdfium), and bundling that safely is
 a Milestone 3 prerequisite. See [ROADMAP.md](docs/ROADMAP.md).
