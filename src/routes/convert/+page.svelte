@@ -216,9 +216,9 @@
     </div>
 
     <p class="hint note">
-      The PDF keeps your image data: nothing is downsampled or re-encoded at a
-      lower quality, so a PDF of JPEG photos can come out larger than the
-      photos themselves. Want it smaller? Run the result through Compress.
+      Your image data goes in untouched: JPEGs are embedded exactly as they
+      are — no re-encoding and no size surprise — and PNGs are stored
+      losslessly. Want it smaller? Run the result through Compress.
     </p>
   {/if}
 
