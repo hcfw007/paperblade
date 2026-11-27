@@ -34,7 +34,7 @@ export const TOOLS: Tool[] = [
     title: "Compress",
     subtitle: "Shrink file size with quality presets",
     href: "/compress",
-    available: false,
+    available: true,
   },
   {
     id: "encrypt",
