@@ -63,16 +63,22 @@ pub fn type_is(object: &Object, name: &[u8]) -> bool {
 
 #[cfg(test)]
 pub mod test_support {
-    use lopdf::{dictionary, Document, Object};
+    use lopdf::{dictionary, Dictionary, Document, Object, Stream};
 
     /// Write a minimal valid PDF with `page_count` blank Letter-sized pages.
     pub fn write_blank_pdf(path: &str, page_count: usize) {
+        write_pdf_with_content(path, page_count, None);
+    }
+
+    /// Like `write_blank_pdf`, but each page gets one content stream holding
+    /// `content` — tests that must prove the original stream survives use it.
+    pub fn write_pdf_with_content(path: &str, page_count: usize, content: Option<&[u8]>) {
         let mut doc = Document::with_version("1.5");
         let pages_id = doc.new_object_id();
 
         let kids: Vec<Object> = (0..page_count)
             .map(|_| {
-                Object::Reference(doc.add_object(dictionary! {
+                let mut page = dictionary! {
                     "Type" => "Page",
                     "Parent" => pages_id,
                     "MediaBox" => vec![
@@ -81,7 +87,13 @@ pub mod test_support {
                         Object::Integer(612),
                         Object::Integer(792),
                     ],
-                }))
+                };
+                if let Some(bytes) = content {
+                    let stream =
+                        doc.add_object(Object::Stream(Stream::new(Dictionary::new(), bytes.to_vec())));
+                    page.set("Contents", Object::Reference(stream));
+                }
+                Object::Reference(doc.add_object(page))
             })
             .collect();
 

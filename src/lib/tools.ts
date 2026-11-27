@@ -34,7 +34,7 @@ export const TOOLS: Tool[] = [
     title: "Compress",
     subtitle: "Shrink file size with quality presets",
     href: "/compress",
-    available: false,
+    available: true,
   },
   {
     id: "encrypt",
@@ -46,15 +46,15 @@ export const TOOLS: Tool[] = [
   {
     id: "watermark",
     title: "Watermark",
-    subtitle: "Stamp text or images on every page",
+    subtitle: "Stamp text or an image on every page",
     href: "/watermark",
-    available: false,
+    available: true,
   },
   {
     id: "convert",
     title: "Convert",
-    subtitle: "PDF to images and images to PDF",
+    subtitle: "Images to PDF now, PDF to images planned",
     href: "/convert",
-    available: false,
+    available: true,
   },
 ];

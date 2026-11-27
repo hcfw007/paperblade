@@ -1,7 +1,11 @@
+mod compress;
+mod convert;
 mod encrypt;
 mod merge;
 mod pdf;
 mod split;
+mod watermark;
+mod watermark_image;
 
 use split::SplitMode;
 
@@ -44,6 +48,53 @@ async fn is_encrypted(input: String) -> Result<bool, String> {
     encrypt::is_encrypted(&input)
 }
 
+/// Shrink `input` into `output` at the given quality preset.
+#[tauri::command]
+async fn compress_pdf(
+    input: String,
+    output: String,
+    quality: compress::Quality,
+) -> Result<compress::Report, String> {
+    let gs = compress::find_ghostscript()?;
+    compress::compress_pdf(&gs, &input, &output, quality)
+}
+
+/// Whether a Ghostscript binary can be found, so the page can say so up front.
+#[tauri::command]
+async fn has_compression_engine() -> bool {
+    compress::find_ghostscript().is_ok()
+}
+
+/// Stamp text onto every page of `input`, writing the stamped copy to `output`.
+#[tauri::command]
+async fn watermark_pdf(
+    input: String,
+    output: String,
+    options: watermark::Watermark,
+) -> Result<watermark::Report, String> {
+    watermark::watermark_pdf(&input, &output, &options)
+}
+
+/// Stamp a picture onto every page of `input`, writing the stamped copy to `output`.
+#[tauri::command]
+async fn image_watermark_pdf(
+    input: String,
+    output: String,
+    options: watermark_image::ImageWatermark,
+) -> Result<watermark::Report, String> {
+    watermark_image::watermark_pdf(&input, &output, &options)
+}
+
+/// Build one PDF out of `inputs`, one page per image.
+#[tauri::command]
+async fn images_to_pdf(
+    inputs: Vec<String>,
+    output: String,
+    options: convert::Options,
+) -> Result<convert::Report, String> {
+    convert::images_to_pdf(&inputs, &output, options)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -55,7 +106,12 @@ pub fn run() {
             page_count,
             encrypt_pdf,
             decrypt_pdf,
-            is_encrypted
+            is_encrypted,
+            compress_pdf,
+            has_compression_engine,
+            watermark_pdf,
+            image_watermark_pdf,
+            images_to_pdf
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

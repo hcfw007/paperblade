@@ -66,6 +66,7 @@ SvelteKit 5(runes)运行在 SPA 模式:`ssr = false`,`adapter-static` 配
 | `src/merge.rs` | 合并算法(对象重编号 + 页树重建) |
 | `src/split.rs` | 拆分算法(页码范围解析 + 逐片删页) |
 | `src/encrypt.rs` | 加解密(AES-128 标准安全处理器) |
+| `src/compress.rs` | 压缩(构建 Ghostscript 参数 + 派生进程 + 读结果) |
 | `tauri.conf.json` | 窗口、打包目标、图标、CSP |
 | `capabilities/default.json` | 主窗口的权限授予 |
 | `Cargo.toml` | Rust 依赖(tauri、serde、插件) |
@@ -120,9 +121,15 @@ async fn merge_pdfs(inputs: Vec<String>, output: String) -> Result<String, Strin
   注释都会自然跟着走。代价是嵌入字体在每个切片里各留一份,切片体积之和会大于
   原文件 —— 正确性优先,后续可在压缩工具里做字体子集化。
 - **CLI 引擎(按需 sidecar)** 处理 lopdf 力所不及的重活。Ghostscript 用于压缩
-  (降采样),作为 Tauri **sidecar** 随包发布(在 `bundle.externalBin` 声明),
-  从应用包内解析而非用户 `PATH`;Rust 通过进程 API 派生,传绝对路径,读退出码 +
-  stderr。
+  (降采样);Rust 通过进程 API 派生,传绝对路径,读退出码 + stderr。
+
+  `compress.rs` 把"构建参数"和"跑进程"分开:`gs_args()` 是纯函数,所以参数
+  组合(尤其是 `-dSAFER` 有没有掉)在没有 gs 的机器上也能测 —— CI 就是这样。
+
+  二进制的解析顺序是"先应用包内、再回退 `PATH`"。**目前包内那一份还不存在**:
+  brew 装的 gs 链接了十几个 homebrew dylib,不能原样分发,静态化和
+  `bundle.externalBin` 声明都是 M3 的活。所以现在压缩依赖用户自己装 gs,
+  `has_compression_engine` 命令让页面能提前说清楚,而不是等用户点了才报错。
 
   加密这条路上有个不直观的地方:`Document::load` 碰到加密文件时,一旦空密码
   认证失败就直接返回,连一个对象都不读。所以解密必须走
@@ -131,8 +138,10 @@ async fn merge_pdfs(inputs: Vec<String>, output: String) -> Result<String, Strin
 | 操作 | 引擎 |
 |------|------|
 | 合并、拆分、加/解密 | lopdf(库) |
+| 水印(文字) | lopdf(库) |
+| 图片→PDF | printpdf(库) |
 | 压缩(降采样) | Ghostscript(sidecar) |
-| 水印、PDF↔图片转换 | 渲染器待定(排期时再选) |
+| PDF→图片 | 待定(pdfium,见 [m2-render-engine.md](./research/m2-render-engine.md) §3.3) |
 
 引入第一个 sidecar 前不需要任何二进制打包;它推迟到压缩工具排期时再做。
 
